@@ -1,0 +1,8 @@
+# Company data
+data/raw/
+data/cleaned/
+
+# Generated database
+data/*.db
+data/*.sqlite
+data/*.sqlite3
