@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPWES Inventory &amp; BOM Management System</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#dashboard" data-nav="dashboard"><span class="brand-mark">IM</span><span><strong>Inventory</strong><small>BOM workspace</small></span></a>
+      <nav class="navigation">
+        <a class="nav-link active" href="#dashboard" data-nav="dashboard">Dashboard</a>
+        <a class="nav-link" href="#components" data-nav="components">Components</a>
+        <a class="nav-link" href="#projects" data-nav="projects">Projects</a>
+        <a class="nav-link" href="#shared" data-nav="shared">Shared components</a>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div><p class="eyebrow">Inventory management</p><h1 id="page-title">BOM overview</h1><p id="page-description">Understand which components are required and where they are used.</p></div>
+      </header>
+      <p id="app-status" class="app-status" aria-live="polite">Loading BOM relationships...</p>
+
+      <section id="dashboard-view" class="view" data-view="dashboard"><h1 class="dashboard-title">SPWES Inventory &amp; BOM Management System</h1>
+        <div class="metrics" aria-label="BOM summary">
+          <article class="metric-card"><span class="metric-label">Total components</span><strong id="component-count">-</strong><small>Unique manufacturer part numbers</small></article>
+          <article class="metric-card"><span class="metric-label">Projects</span><strong id="project-count">-</strong><small>Projects with imported BOMs</small></article>
+          <article class="metric-card"><span class="metric-label">BOM items</span><strong id="bom-count">-</strong><small>Project-to-component requirements</small></article>
+          <article class="metric-card attention"><span class="metric-label">Shared components</span><strong id="shared-count">-</strong><small>Used by more than one project</small></article>
+        </div>
+        <div class="chart-grid">
+  <section class="panel chart-panel"><div class="panel-header"><div><h2>Components by project</h2><p>Which project has the broadest component requirement?</p></div><span class="chart-note">Click a bar for details</span></div><div id="components-chart" class="bar-chart" role="img" aria-label="Component count by project"></div></section>
+  <section class="panel chart-panel"><div class="panel-header"><div><h2>Required units by project</h2><p>Compare total units required by each BOM.</p></div><span class="chart-note">BOM units, not stock</span></div><div id="units-chart" class="bar-chart units-chart" role="img" aria-label="Required BOM units by project"></div></section>
+</div>
+<section class="panel usage-panel"><div class="panel-header"><div><h2>Component usage overview</h2><p>Shared parts support multiple project requirements and may need coordination.</p></div><button class="text-button" data-go="shared">Review shared components</button></div><div class="usage-content"><div id="usage-donut" class="usage-donut" title="Component usage distribution"><div><strong id="usage-percent">-</strong><span>shared</span></div></div><div class="usage-copy"><strong id="usage-summary">Loading component usage...</strong><p id="usage-detail">Calculated from the imported BOM relationships only.</p><div id="usage-legend" class="usage-legend"></div></div></div></section><div class="dashboard-grid">
+          <section class="panel"><div class="panel-header"><div><h2>Project overview</h2><p>Component counts and total required BOM units by project.</p></div><button class="text-button" data-go="projects">View all projects</button></div><div id="dashboard-projects" class="project-summary-list"></div></section>
+          <section class="panel"><div class="panel-header"><div><h2>Shared components</h2><p>Investigate these first when coordinating requirements between projects.</p></div><button class="text-button" data-go="shared">View all shared</button></div><div id="dashboard-shared" class="compact-list"></div></section>
+        </div>
+      </section>
+
+      <section id="components-view" class="view hidden" data-view="components">
+        <div class="section-heading"><div><h2>Component directory</h2><p>Search components and see every project that requires them.</p></div><span id="component-results" class="result-count"></span></div>
+        <div class="toolbar"><label class="search-field"><span class="sr-only">Search components</span><input id="component-search" type="search" placeholder="Search part number, manufacturer, description, or value"></label><label class="filter-field">Project<select id="component-project-filter"><option value="">All projects</option></select></label><label class="filter-field">Sort by<select id="component-sort"><option value="part">Part number</option><option value="manufacturer">Manufacturer</option><option value="projects">Projects used</option><option value="quantity">Total required units</option></select></label></div>
+        <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Part number</th><th>Manufacturer</th><th>Description / value</th><th>Used by</th><th><button class="sort-button" data-component-sort="quantity">Required units</button></th></tr></thead><tbody id="component-rows"></tbody></table></div></section>
+      </section>
+
+      <section id="projects-view" class="view hidden" data-view="projects">
+        <div class="section-heading"><div><h2>Projects</h2><p>Select a project to inspect its BOM requirements.</p></div></div>
+        <div id="project-cards" class="project-card-grid"></div>
+        <section id="project-detail" class="panel hidden" aria-live="polite"><div class="panel-header"><div><p class="eyebrow">Selected project</p><h2 id="project-detail-title">Project BOM</h2><p id="project-detail-description"></p></div><button id="close-project-detail" class="text-button">Close details</button></div><div class="table-wrap"><table><thead><tr><th>Part number</th><th>Description</th><th>Manufacturer</th><th>Required quantity</th><th>Reference designators</th></tr></thead><tbody id="project-bom-rows"></tbody></table></div></section>
+      </section>
+
+      <section id="shared-view" class="view hidden" data-view="shared">
+        <div class="section-heading"><div><h2>Shared components</h2><p>Components that appear in more than one project BOM. Coordinate these requirements across the listed projects.</p></div><span id="shared-results" class="result-count"></span></div>
+        <div class="toolbar"><label class="search-field"><span class="sr-only">Search shared components</span><input id="shared-search" type="search" placeholder="Search shared part numbers or projects"></label></div>
+        <section class="panel table-panel"><div class="table-wrap"><table><thead><tr><th>Part number</th><th>Manufacturer</th><th>Projects using component</th><th>Total required units</th></tr></thead><tbody id="shared-rows"></tbody></table></div></section>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
