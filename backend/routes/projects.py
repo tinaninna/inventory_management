@@ -1,24 +1,16 @@
-from fastapi import APIRouter
-from backend.database import get_connection
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from backend.db import get_db
 from backend.models import Project
+from backend.models_sqlalchemy import Project as ProjectRecord
 
 router = APIRouter()
 
 
 @router.get("/api/projects", response_model=list[Project])
-def get_projects():
-    connection = get_connection()
-
-    projects = connection.execute(
-        """
-        SELECT
-            id,
-            name
-        FROM projects
-        ORDER BY id
-        """
-    ).fetchall()
-
-    connection.close()
-
-    return [dict(project) for project in projects]
+def get_projects(db: Session = Depends(get_db)):
+    return db.execute(
+        select(ProjectRecord.id, ProjectRecord.name).order_by(ProjectRecord.id)
+    ).mappings().all()

@@ -2,14 +2,12 @@
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.db import Base, engine
+from backend.db import engine
 from backend.routes.bom import router as bom_router
 from backend.routes.components import router as components_router
 from backend.routes.dashboard import router as dashboard_router
 from backend.routes.projects import router as projects_router
 from backend.routes.inventory import router as inventory_router
-
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Inventory Management API")
 app.add_middleware(
