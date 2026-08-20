@@ -144,6 +144,7 @@ def test_sqlite_seed_strict_mode_rolls_back_unmatched_bom(session, tmp_path):
     source = tmp_path / "inventory.db"
     source_database(source, include_unmatched=True)
     session.add(Component(id=10, manufacturer_part_number="MATCH-1"))
+    session.add(Component(id=11, manufacturer_part_number=" MATCH-1"))
     session.commit()
 
     with pytest.raises(MigrationSeedError) as error:
