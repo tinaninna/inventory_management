@@ -6,3 +6,10 @@ data/cleaned/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+# Python cache
+__pycache__/
+*.py[cod]
