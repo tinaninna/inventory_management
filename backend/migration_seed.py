@@ -72,6 +72,24 @@ def migrate_existing_sqlite_data(
                 ambiguous_parts.add(normalized)
             components_by_part[normalized] = component
 
+        components_created = 0
+        for row in component_rows:
+            normalized = normalize_part_number(row["manufacturer_part_number"])
+            if normalized in ambiguous_parts:
+                continue
+            if normalized in components_by_part:
+                continue
+            component = Component(
+                manufacturer_part_number=row["manufacturer_part_number"],
+                description=row["description"],
+                value=row["value"],
+                manufacturer=row["manufacturer"],
+            )
+            db.add(component)
+            db.flush()
+            components_by_part[normalized] = component
+            components_created += 1
+
         unmatched: list[UnmatchedBomItem] = []
         resolved_bom: list[tuple[sqlite3.Row, Component]] = []
         for row in bom_rows:
@@ -129,6 +147,7 @@ def migrate_existing_sqlite_data(
         db.commit()
         return {
             "source_components": len(component_rows),
+            "components_created": components_created,
             "projects": projects_migrated,
             "bom_items": bom_items_migrated,
             "unmatched_bom_items": unmatched,
