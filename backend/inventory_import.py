@@ -57,6 +57,20 @@ def normalize_part_number(value: object) -> str:
     return re.sub(r"\s+", "", str(value).strip()).upper()
 
 
+# Separators that suggest a cell accidentally contains more than one part number
+# (e.g. "T1,T2" from a copy/paste mistake). Rows with these are rejected outright
+# rather than imported as a single bogus component.
+_MULTI_VALUE_PATTERN = re.compile(r"[,;/|]")
+
+
+def loose_part_number_key(value: object) -> str:
+    """Strip all punctuation/whitespace so formatting-only differences
+    (ABC-123 vs ABC 123 vs abc123) collapse to the same key. Never used for
+    storage or display — matching only. It will never merge two part numbers
+    that differ by any actual character (e.g. R100 vs R1000 stay distinct)."""
+    return re.sub(r"[^A-Z0-9]", "", normalize_part_number(value))
+
+
 def normalize_text(value: object) -> str | None:
     if value is None or pd.isna(value):
         return None
@@ -110,6 +124,9 @@ def parse_inventory_workbook(file: BinaryIO, filename: str) -> tuple[list[Import
         if not part_number:
             invalid.append(f"row {index + 2}: manufacturer part number is required")
             continue
+        if _MULTI_VALUE_PATTERN.search(part_number):
+            invalid.append(f"row {index + 2}: part number '{part_number}' appears to contain multiple values")
+            continue
         if part_number in seen and seen[part_number] != quantity:
             invalid.append(f"row {index + 2}: conflicting duplicate for {part_number}")
             continue
@@ -133,20 +150,36 @@ def import_inventory(session: Session, file: BinaryIO, filename: str) -> dict[st
     session.add(job)
     session.flush()
     counts = {"new_components": 0, "updated_components": 0, "unchanged_components": 0}
+    flagged_matches: list[str] = []
     try:
         part_numbers = {row.part_number for row in rows}
+        loose_keys = {loose_part_number_key(row.part_number) for row in rows}
         existing = session.scalars(
             select(Component).options(joinedload(Component.inventory_item)).where(
-                Component.manufacturer_part_number.in_(part_numbers)
+                Component.manufacturer_part_number.in_(part_numbers) | Component.part_number_key.in_(loose_keys)
             )
         ).unique().all() if part_numbers else []
         by_part_number = {component.manufacturer_part_number: component for component in existing}
+        by_loose_key: dict[str, Component] = {}
+        for component in existing:
+            by_loose_key.setdefault(component.part_number_key, component)
 
         for row in rows:
             component = by_part_number.get(row.part_number)
+            matched_by_loose_key = False
+            if component is None:
+                loose_key = loose_part_number_key(row.part_number)
+                component = by_loose_key.get(loose_key)
+                matched_by_loose_key = component is not None
+            if matched_by_loose_key:
+                flagged_matches.append(
+                    f"'{row.part_number}' matched existing component '{component.manufacturer_part_number}' "
+                    "by normalized formatting only — verify these are the same part"
+                )
             if component is None:
                 component = Component(
                     manufacturer_part_number=row.part_number,
+                    part_number_key=loose_part_number_key(row.part_number),
                     description=row.description,
                     value=row.value,
                     manufacturer=row.manufacturer,
@@ -166,6 +199,8 @@ def import_inventory(session: Session, file: BinaryIO, filename: str) -> dict[st
                     notes="Initial inventory import",
                 ))
                 counts["new_components"] += 1
+                by_part_number[component.manufacturer_part_number] = component
+                by_loose_key.setdefault(component.part_number_key, component)
                 continue
 
             if row.description and not component.description:
@@ -204,7 +239,7 @@ def import_inventory(session: Session, file: BinaryIO, filename: str) -> dict[st
         job.unchanged_components = counts["unchanged_components"]
         job.invalid_rows = invalid_count
         job.unmatched_rows = 0
-        job.summary = json.dumps({"invalid_details": invalid_details})
+        job.summary = json.dumps({"invalid_details": invalid_details, "flagged_matches": flagged_matches})
         session.commit()
     except Exception:
         session.rollback()
@@ -224,5 +259,6 @@ def import_inventory(session: Session, file: BinaryIO, filename: str) -> dict[st
         "invalid_rows": invalid_count,
         "unmatched_rows": 0,
         "invalid_details": invalid_details,
+        "flagged_matches": flagged_matches,
         "low_stock_components": low_stock,
     }

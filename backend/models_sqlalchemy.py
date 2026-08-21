@@ -47,6 +47,7 @@ class Component(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     manufacturer_part_number: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    part_number_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     value: Mapped[str | None] = mapped_column(String(255), nullable=True)
     manufacturer: Mapped[str | None] = mapped_column(String(255), nullable=True)

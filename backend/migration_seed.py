@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.db import SessionLocal
-from backend.inventory_import import normalize_part_number
+from backend.inventory_import import loose_part_number_key, normalize_part_number
 from backend.models_sqlalchemy import Component, Project, ProjectBomItem
 
 
@@ -81,6 +81,7 @@ def migrate_existing_sqlite_data(
                 continue
             component = Component(
                 manufacturer_part_number=row["manufacturer_part_number"],
+                part_number_key=loose_part_number_key(row["manufacturer_part_number"]),
                 description=row["description"],
                 value=row["value"],
                 manufacturer=row["manufacturer"],

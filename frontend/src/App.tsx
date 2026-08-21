@@ -589,6 +589,15 @@ function ImportResult({ summary }: { summary: ImportSummary }) {
           {summary.unmatched_rows > 0 && <p>⚠ {summary.unmatched_rows} row{summary.unmatched_rows === 1 ? "" : "s"} could not be matched.</p>}
         </div>
       )}
+      {summary.flagged_matches.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-[#bcd6ef] bg-[#e8f0fa] p-4 text-sm text-[#0d4a87]">
+          <p className="font-semibold">Possible formatting duplicates — please confirm</p>
+          <p className="text-[#2c5c8c]">These rows matched an existing component only after ignoring punctuation/case. Confirm they're really the same part.</p>
+          <ul className="list-disc space-y-1 pl-5">
+            {summary.flagged_matches.map((match) => (<li key={match}>{match}</li>))}
+          </ul>
+        </div>
+      )}
       {summary.invalid_details.length > 0 && (
         <details className="text-sm text-[#5c6d66]">
           <summary className="cursor-pointer font-semibold">Show validation details</summary>
