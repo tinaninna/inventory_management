@@ -60,7 +60,7 @@ def normalize_part_number(value: object) -> str:
 # Separators that suggest a cell accidentally contains more than one part number
 # (e.g. "T1,T2" from a copy/paste mistake). Rows with these are rejected outright
 # rather than imported as a single bogus component.
-_MULTI_VALUE_PATTERN = re.compile(r"[,;/|]")
+_MULTI_VALUE_PATTERN = re.compile(r"[,;]")
 
 
 def loose_part_number_key(value: object) -> str:
