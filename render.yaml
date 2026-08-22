@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: inventory-management-api
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r backend/requirements.txt && alembic upgrade head"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.12.0
