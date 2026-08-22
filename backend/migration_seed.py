@@ -65,23 +65,53 @@ def migrate_existing_sqlite_data(
             ).fetchall()
 
         components_by_part: dict[str, Component] = {}
+        components_by_loose_key: dict[str, Component] = {}
         ambiguous_parts: set[str] = set()
+        ambiguous_loose_keys: set[str] = set()
         for component in db.scalars(select(Component)).all():
             normalized = normalize_part_number(component.manufacturer_part_number)
             if normalized in components_by_part:
                 ambiguous_parts.add(normalized)
             components_by_part[normalized] = component
 
+            loose_key = component.part_number_key
+            if loose_key in components_by_loose_key and components_by_loose_key[loose_key] is not component:
+                ambiguous_loose_keys.add(loose_key)
+            components_by_loose_key.setdefault(loose_key, component)
+
         components_created = 0
+        components_matched_by_loose_key = 0
+        flagged_matches: list[str] = []
+        missing_from_inventory: list[str] = []
         for row in component_rows:
             normalized = normalize_part_number(row["manufacturer_part_number"])
             if normalized in ambiguous_parts:
                 continue
             if normalized in components_by_part:
                 continue
+
+            # Not an exact match — before assuming it's genuinely missing, check whether
+            # it's the same part written differently (matches how the stock import already
+            # treats this). This is what was missing before: a BOM part with slightly
+            # different formatting than its inventory counterpart was silently treated as
+            # "not in stock" when it actually was.
+            loose_key = loose_part_number_key(row["manufacturer_part_number"])
+            matched_component = components_by_loose_key.get(loose_key) if loose_key not in ambiguous_loose_keys else None
+            if matched_component is not None:
+                components_by_part[normalized] = matched_component
+                components_matched_by_loose_key += 1
+                flagged_matches.append(
+                    f"BOM part '{row['manufacturer_part_number']}' matched inventory component "
+                    f"'{matched_component.manufacturer_part_number}' by normalized formatting only — verify these are the same part"
+                )
+                continue
+
+            # Genuinely not present in inventory under any formatting. Still create a
+            # component so the project/BOM structure has something to point at, but report
+            # it explicitly — this is the real "not in stock" list, not a silent guess.
             component = Component(
                 manufacturer_part_number=row["manufacturer_part_number"],
-                part_number_key=loose_part_number_key(row["manufacturer_part_number"]),
+                part_number_key=loose_key,
                 description=row["description"],
                 value=row["value"],
                 manufacturer=row["manufacturer"],
@@ -89,7 +119,9 @@ def migrate_existing_sqlite_data(
             db.add(component)
             db.flush()
             components_by_part[normalized] = component
+            components_by_loose_key.setdefault(loose_key, component)
             components_created += 1
+            missing_from_inventory.append(row["manufacturer_part_number"])
 
         unmatched: list[UnmatchedBomItem] = []
         resolved_bom: list[tuple[sqlite3.Row, Component]] = []
@@ -123,34 +155,67 @@ def migrate_existing_sqlite_data(
                 )
 
         bom_items_migrated = 0
+        bom_items_merged = 0
+        merge_notes: list[str] = []
         existing_bom = {
             (item.project_id, item.component_id): item
             for item in db.scalars(select(ProjectBomItem)).all()
         }
+        # Two different legacy part numbers can now resolve to the same real
+        # component (e.g. "ABC-123" and "ABC123" via loose-key matching), so
+        # more than one source BOM row can land on the same (project, component)
+        # pair. Combine those instead of attempting two conflicting inserts.
+        pending: dict[tuple[int, int], dict] = {}
         for row, component in resolved_bom:
             key = (row["project_id"], component.id)
-            item = existing_bom.get(key)
+            if key not in pending:
+                pending[key] = {
+                    "id": row["id"],
+                    "quantity_required": row["quantity_required"],
+                    "reference_designators": row["reference_designators"],
+                }
+            else:
+                merged = pending[key]
+                merged["quantity_required"] += row["quantity_required"]
+                designators = [d for d in (merged["reference_designators"], row["reference_designators"]) if d]
+                merged["reference_designators"] = ", ".join(designators) or None
+                bom_items_merged += 1
+                merge_notes.append(
+                    f"project {row['project_name']!r}: BOM rows for source components resolving to the same "
+                    f"inventory part '{component.manufacturer_part_number}' were combined "
+                    f"(quantity now {merged['quantity_required']})"
+                )
+
+        for (project_id, component_id), values in pending.items():
+            item = existing_bom.get((project_id, component_id))
             if item is None:
                 db.add(ProjectBomItem(
-                    id=row["id"],
-                    project_id=row["project_id"],
-                    component_id=component.id,
-                    quantity_required=row["quantity_required"],
-                    reference_designators=row["reference_designators"],
+                    id=values["id"],
+                    project_id=project_id,
+                    component_id=component_id,
+                    quantity_required=values["quantity_required"],
+                    reference_designators=values["reference_designators"],
                 ))
                 bom_items_migrated += 1
             elif (
-                item.quantity_required != row["quantity_required"]
-                or item.reference_designators != row["reference_designators"]
+                item.quantity_required != values["quantity_required"]
+                or item.reference_designators != values["reference_designators"]
             ):
-                raise ValueError(f"MariaDB BOM item {item.id} conflicts with SQLite BOM item {row['id']}.")
+                raise ValueError(
+                    f"MariaDB BOM item {item.id} conflicts with SQLite BOM item {values['id']}."
+                )
 
         db.commit()
         return {
             "source_components": len(component_rows),
             "components_created": components_created,
+            "components_matched_by_loose_key": components_matched_by_loose_key,
+            "missing_from_inventory": missing_from_inventory,
+            "flagged_matches": flagged_matches,
             "projects": projects_migrated,
             "bom_items": bom_items_migrated,
+            "bom_items_merged": bom_items_merged,
+            "merge_notes": merge_notes,
             "unmatched_bom_items": unmatched,
         }
     except Exception:
