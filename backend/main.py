@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.db import engine
+from backend.db import SessionLocal
 from backend.routes.bom import router as bom_router
 from backend.routes.components import router as components_router
 from backend.routes.dashboard import router as dashboard_router
@@ -42,4 +42,13 @@ def root():
 
 @app.get("/healthz")
 def healthz():
-    return {"status": "ok", "database_url": str(engine.url)}
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as error:
+        db_status = f"error: {error}"
+    finally:
+        db.close()
+    return {"status": "ok", "database": db_status}
